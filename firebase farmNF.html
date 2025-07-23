@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FarmNFT Dashboard</title>
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Ethers.js -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<!-- Home Page -->
+<div id="home-page" class="min-h-screen flex flex-col items-center justify-center">
+  <h1 class="text-4xl font-bold text-green-700 mb-4">🌾 FarmNFT</h1>
+  <p class="mb-4">Dukung pertanian berkelanjutan melalui teknologi NFT</p>
+  <button onclick="connectWallet()" class="bg-green-600 text-white px-6 py-2 rounded-xl hover:bg-green-700">
+    Connect Wallet
+  </button>
+</div>
+
+<!-- Dashboard Page -->
+<div id="dashboard-page" class="hidden p-6">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-2xl font-bold">📋 Dashboard FarmNFT</h2>
+    <span id="wallet-address" class="text-sm text-gray-600"></span>
+  </div>
+
+  <!-- Form Tambah/Edit -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="text-lg font-semibold mb-2">📝 Tambah/Edit Lahan</h3>
+    <form id="form-lahan" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <input type="hidden" id="edit-id" />
+      <input id="nama" type="text" placeholder="Nama Lahan" class="p-2 border rounded" required />
+      <input id="lokasi" type="text" placeholder="Lokasi" class="p-2 border rounded" required />
+      <input id="luas" type="number" step="0.1" placeholder="Luas (Ha)" class="p-2 border rounded" required />
+      <input id="status" type="text" placeholder="Status (contoh: Siap Panen)" class="p-2 border rounded" required />
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+      <button type="button" onclick="resetForm()" class="bg-gray-400 text-white px-4 py-2 rounded">Reset</button>
+    </form>
+  </div>
+
+  <!-- Daftar Lahan -->
+  <h3 class="text-xl font-bold mb-2 text-green-800">📍 Data Lahan</h3>
+  <div id="data-lahan" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+</div>
+
+<script>
+  // 🔥 Firebase Config
+  const firebaseConfig = {
+    apiKey: "ISI_API_KEY_KAMU",
+    authDomain: "PROJECT_ID.firebaseapp.com",
+    projectId: "PROJECT_ID",
+    storageBucket: "PROJECT_ID.appspot.com",
+    messagingSenderId: "SENDER_ID",
+    appId: "APP_ID"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  let userAddress = "";
+
+  async function connectWallet() {
+    if (typeof window.ethereum === "undefined") {
+      alert("Install MetaMask dulu ya!");
+      return;
+    }
+
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    userAddress = accounts[0];
+    document.getElementById("wallet-address").textContent = "Wallet: " + userAddress;
+    document.getElementById("home-page").style.display = "none";
+    document.getElementById("dashboard-page").style.display = "block";
+    loadDataLahan();
+  }
+
+  // Simpan atau Edit lahan
+  document.getElementById("form-lahan").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const id = document.getElementById("edit-id").value;
+    const data = {
+      nama: document.getElementById("nama").value,
+      lokasi: document.getElementById("lokasi").value,
+      luas: parseFloat(document.getElementById("luas").value),
+      status: document.getElementById("status").value
+    };
+
+    if (id) {
+      await db.collection("lahan").doc(id).update(data);
+    } else {
+      await db.collection("lahan").add(data);
+    }
+    resetForm();
+    loadDataLahan();
+  });
+
+  function resetForm() {
+    document.getElementById("edit-id").value = "";
+    document.getElementById("form-lahan").reset();
+  }
+
+  async function loadDataLahan() {
+    const container = document.getElementById("data-lahan");
+    container.innerHTML = "";
+    const querySnapshot = await db.collection("lahan").get();
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const id = doc.id;
+      const card = `
+        <div class="bg-white p-4 rounded shadow">
+          <h4 class="font-bold text-lg text-green-700">${data.nama}</h4>
+          <p class="text-sm">📍 ${data.lokasi}</p>
+          <p class="text-sm">🌾 ${data.luas} Ha</p>
+          <p class="text-sm">🛠️ ${data.status}</p>
+          <div class="flex gap-2 mt-2">
+            <button onclick="editLahan('${id}')" class="bg-yellow-500 text-white px-2 py-1 rounded">Edit</button>
+            <button onclick="hapusLahan('${id}')" class="bg-red-500 text-white px-2 py-1 rounded">Hapus</button>
+            <button onclick="mintNFT('${data.nama}', '${data.lokasi}')" class="bg-green-600 text-white px-2 py-1 rounded">Mint NFT</button>
+          </div>
+        </div>
+      `;
+      container.innerHTML += card;
+    });
+  }
+
+  async function editLahan(id) {
+    const doc = await db.collection("lahan").doc(id).get();
+    const data = doc.data();
+    document.getElementById("edit-id").value = id;
+    document.getElementById("nama").value = data.nama;
+    document.getElementById("lokasi").value = data.lokasi;
+    document.getElementById("luas").value = data.luas;
+    document.getElementById("status").value = data.status;
+  }
+
+  async function hapusLahan(id) {
+    if (confirm("Yakin ingin menghapus lahan ini?")) {
+      await db.collection("lahan").doc(id).delete();
+      loadDataLahan();
+    }
+  }
+
+  // Mint NFT (Simulasi)
+  function mintNFT(nama, lokasi) {
+    alert(`Minting NFT untuk: ${nama} di ${lokasi}\n(Tahap simulasi)`);
+  }
+</script>
+</body>
+</html>
